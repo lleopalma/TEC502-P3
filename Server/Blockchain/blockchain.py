@@ -229,6 +229,7 @@ _inicializado    = False
 _lock            = threading.Lock()
 
 _no_atual_idx    = 0      # índice do nó ativo em NOS_BESU
+_tx_lock         = threading.Lock()  # garante nonce sequencial entre threads
 
 
 # ── Conexão com fallback ─────────────────────────────────────
@@ -279,26 +280,32 @@ def _tx(func, gas: int = 300_000):
     Envia transação. Suporta dois modos:
     - Besu/rede real: assina localmente com chave privada (broker_priv_key)
     - Ganache dev: usa transact() com conta desbloqueada (retrocompatibilidade)
+
+    O _tx_lock serializa chamadas concorrentes de threads diferentes,
+    evitando que dois laudos busquem o mesmo nonce simultaneamente
+    ('replacement transaction underpriced').
     """
-    conn = _obter_w3()
+    with _tx_lock:
+        conn = _obter_w3()
 
-    if broker_priv_key:
-        # Modo Besu: assina e envia raw transaction
-        nonce = conn.eth.get_transaction_count(broker_account)
-        tx = func.build_transaction({
-            "from":     broker_account,
-            "gas":      gas,
-            "nonce":    nonce,
-            "chainId":  conn.eth.chain_id,
-            "gasPrice": conn.eth.gas_price,
-        })
-        signed = conn.eth.account.sign_transaction(tx, broker_priv_key)
-        tx_hash = conn.eth.send_raw_transaction(signed.raw_transaction)
-    else:
-        # Modo Ganache: conta desbloqueada
-        tx_hash = func.transact({"from": broker_account, "gas": gas})
+        if broker_priv_key:
+            # Modo Besu: assina e envia raw transaction
+            # "pending" inclui txs ainda no mempool -> nonce sempre incrementado
+            nonce = conn.eth.get_transaction_count(broker_account, "pending")
+            tx = func.build_transaction({
+                "from":     broker_account,
+                "gas":      gas,
+                "nonce":    nonce,
+                "chainId":  conn.eth.chain_id,
+                "gasPrice": conn.eth.gas_price,
+            })
+            signed = conn.eth.account.sign_transaction(tx, broker_priv_key)
+            tx_hash = conn.eth.send_raw_transaction(signed.raw_transaction)
+        else:
+            # Modo Ganache: conta desbloqueada
+            tx_hash = func.transact({"from": broker_account, "gas": gas})
 
-    return conn.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+        return conn.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
 
 
 # ── Compilação e deploy ──────────────────────────────────────
@@ -323,7 +330,7 @@ def _deploy(nome: str, source: str):
     contrato = conn.eth.contract(abi=abi, bytecode=bytecode)
 
     if broker_priv_key:
-        nonce = conn.eth.get_transaction_count(broker_account)
+        nonce = conn.eth.get_transaction_count(broker_account, "pending")
         tx = contrato.constructor().build_transaction({
             "from":     broker_account,
             "gas":      3_000_000,
