@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    {
+      "address": "0x8eA9a51A5b6ef4C6E6B8c0d15C94a5d4755c9098",
+      "node": 1
+    },
+    {
+      "address": "0x8ffF603aB60e203BC10fF0e7321F3B3BcC91F117",
+      "node": 2
+    },
+    {
+      "address": "0xE37a5A64059C1a5D3dAdae23B3A11976cda268D1",
+      "node": 3
+    }
+  ],
+  "broker": {
+    "address": "0x6c1D7ad828A65739C9aB2Ef7634a370670cc2f3F"
+  }
+}

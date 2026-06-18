@@ -1,18 +1,116 @@
 services:
 
+  # ── Rede Geth (Clique PoA — 3 nós validadores) ──────────────────────────────
+
+  geth-node1:
+    image: ethereum/client-go:v1.13.14
+    container_name: geth-node1
+    command: >
+      --datadir /geth/node1/data
+      --networkid 1337
+      --port 30303
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,admin,txpool,miner,personal
+      --http.corsdomain "*"
+      --http.vhosts "*"
+      --allow-insecure-unlock
+      --unlock 0x8eA9a51A5b6ef4C6E6B8c0d15C94a5d4755c9098
+      --password /geth/node1/password.txt
+      --mine
+      --miner.etherbase 0x8eA9a51A5b6ef4C6E6B8c0d15C94a5d4755c9098
+      --nodiscover
+      --verbosity 3
+    volumes:
+      - ./geth:/geth
+    ports:
+      - "8601:8545"
+      - "30301:30303"
+    networks:
+      - ormuz
+    profiles: ["geth", "a", "b", "c", "d"]
+
+  geth-node2:
+    image: ethereum/client-go:v1.13.14
+    container_name: geth-node2
+    command: >
+      --datadir /geth/node2/data
+      --networkid 1337
+      --port 30303
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,admin,txpool,miner,personal
+      --http.corsdomain "*"
+      --http.vhosts "*"
+      --allow-insecure-unlock
+      --unlock 0x8ffF603aB60e203BC10fF0e7321F3B3BcC91F117
+      --password /geth/node2/password.txt
+      --mine
+      --miner.etherbase 0x8ffF603aB60e203BC10fF0e7321F3B3BcC91F117
+      --nodiscover
+      --verbosity 3
+    volumes:
+      - ./geth:/geth
+    ports:
+      - "8602:8545"
+      - "30302:30303"
+    networks:
+      - ormuz
+    profiles: ["geth", "a", "b", "c", "d"]
+
+  geth-node3:
+    image: ethereum/client-go:v1.13.14
+    container_name: geth-node3
+    command: >
+      --datadir /geth/node3/data
+      --networkid 1337
+      --port 30303
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,admin,txpool,miner,personal
+      --http.corsdomain "*"
+      --http.vhosts "*"
+      --allow-insecure-unlock
+      --unlock 0xE37a5A64059C1a5D3dAdae23B3A11976cda268D1
+      --password /geth/node3/password.txt
+      --mine
+      --miner.etherbase 0xE37a5A64059C1a5D3dAdae23B3A11976cda268D1
+      --nodiscover
+      --verbosity 3
+    volumes:
+      - ./geth:/geth
+    ports:
+      - "8603:8545"
+      - "30303:30303"
+    networks:
+      - ormuz
+    profiles: ["geth", "a", "b", "c", "d"]
+
+  # ── Broker + drones + sensores ───────────────────────────────────────────────
+
   broker:
     build: ./Server
     container_name: broker-${BROKER_ID}
     environment:
-      BROKER_ID: "${BROKER_ID}"
-      BROKER_PORT: "12345"
-      UDP_PORT: "12346"
-      PEERS: "${PEERS}"
-      DRONE_TIMEOUT: "10"
-      GANACHE_URL: "${GANACHE_URL}"   
+      BROKER_ID:          "${BROKER_ID}"
+      BROKER_PORT:        "12345"
+      UDP_PORT:           "12346"
+      PEERS:              "${PEERS}"
+      DRONE_TIMEOUT:      "10"
+      BESU_NODES:         "${BESU_NODES}"
+      BROKER_ACCOUNT_KEY: "${BROKER_ACCOUNT_KEY}"
     ports:
       - "12345:12345"
       - "12346:12346/udp"
+    depends_on:
+      - geth-node1
+      - geth-node2
+      - geth-node3
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
 
   drone-1:
@@ -20,10 +118,12 @@ services:
     container_name: drone-${BROKER_ID}1
     environment:
       BROKER_ID: "${BROKER_ID}"
-      PEERS: "${PEERS}"
-      PORT: "12345"
+      PEERS:     "${PEERS}"
+      PORT:      "12345"
     depends_on:
       - broker
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
 
   drone-2:
@@ -31,10 +131,12 @@ services:
     container_name: drone-${BROKER_ID}2
     environment:
       BROKER_ID: "${BROKER_ID}"
-      PEERS: "${PEERS}"
-      PORT: "12345"
+      PEERS:     "${PEERS}"
+      PORT:      "12345"
     depends_on:
       - broker
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
 
   radar:
@@ -44,9 +146,11 @@ services:
     environment:
       BROKER_HOST: broker-${BROKER_ID}
       BROKER_PORT: "12346"
-      ZONA: "setor-${BROKER_ID}"
+      ZONA:        "setor-${BROKER_ID}"
     depends_on:
       - broker
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
 
   boia-1:
@@ -58,6 +162,8 @@ services:
       BROKER_PORT: "12346"
     depends_on:
       - broker
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
 
   boia-2:
@@ -69,4 +175,10 @@ services:
       BROKER_PORT: "12346"
     depends_on:
       - broker
+    networks:
+      - ormuz
     profiles: ["${BROKER_ID}"]
+
+networks:
+  ormuz:
+    driver: bridge
